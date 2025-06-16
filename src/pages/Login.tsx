@@ -41,8 +41,8 @@ const Login = () => {
 
     if (!password) {
       newErrors.password = 'Password is required';
-    } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    } else if (password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
     }
 
     setErrors(newErrors);
@@ -68,10 +68,18 @@ const Login = () => {
         isClosable: true,
       });
       navigate(from, { replace: true });
-    } catch (error) {
+    } catch (error: any) {
+      let message = 'Failed to sign in. Please check your credentials.';
+      if (error.code === 'auth/user-not-found') {
+        message = 'No user found with this email.';
+      } else if (error.code === 'auth/wrong-password') {
+        message = 'Incorrect password.';
+      } else if (error.code === 'auth/too-many-requests') {
+        message = 'Too many failed attempts. Please try again later.';
+      }
       toast({
         title: 'Error',
-        description: 'Failed to sign in. Please check your credentials.',
+        description: message,
         status: 'error',
         duration: 5000,
         isClosable: true,

@@ -41,8 +41,10 @@ const SignUp = () => {
 
     if (!password) {
       newErrors.password = 'Password is required';
-    } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    } else if (password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
+    } else if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(password)) {
+      newErrors.password = 'Password must contain uppercase, lowercase, number, and special character';
     }
 
     if (password !== confirmPassword) {
@@ -72,10 +74,18 @@ const SignUp = () => {
         isClosable: true,
       });
       navigate('/login');
-    } catch (error) {
+    } catch (error: any) {
+      let message = 'Failed to create account. Please try again.';
+      if (error.code === 'auth/email-already-in-use') {
+        message = 'This email is already in use.';
+      } else if (error.code === 'auth/invalid-email') {
+        message = 'Invalid email address.';
+      } else if (error.code === 'auth/weak-password') {
+        message = 'Password is too weak.';
+      }
       toast({
         title: 'Error',
-        description: 'Failed to create account. Please try again.',
+        description: message,
         status: 'error',
         duration: 5000,
         isClosable: true,

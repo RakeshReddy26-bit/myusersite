@@ -1,25 +1,35 @@
-import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Navigate } from 'react-router-dom';
+import React from 'react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  requiredRole?: 'admin' | 'staff' | 'user';
 }
 
-export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
   const { user, loading } = useAuth();
-  const location = useLocation();
+  const location = window.location.pathname;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
+  // Debug logs
+  console.log('[ProtectedRoute] user:', user);
+  console.log('[ProtectedRoute] loading:', loading);
+  console.log('[ProtectedRoute] location:', location);
+  console.log('[ProtectedRoute] requiredRole:', requiredRole);
 
+  if (loading) return null;
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    console.log('[ProtectedRoute] Redirecting to /login because user is null');
+    return <Navigate to="/login" replace />;
   }
-
+  // Restrict /tasks to admin/staff only
+  if (location === '/tasks' && user.role !== 'admin' && user.role !== 'staff') {
+    console.log('[ProtectedRoute] Redirecting to /my-orders because user is not admin/staff');
+    return <Navigate to="/my-orders" replace />;
+  }
+  if (requiredRole && user.role !== requiredRole) {
+    console.log('[ProtectedRoute] Redirecting to / because user does not have requiredRole');
+    return <Navigate to="/" replace />;
+  }
   return <>{children}</>;
 }; 

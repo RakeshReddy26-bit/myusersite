@@ -6,9 +6,11 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
   updateProfile,
-  User as FirebaseUser
+  User as FirebaseUser,
+  signInWithPopup
 } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth, googleProvider, db } from '../config/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { User as CustomUser } from '../types/task';
 
 interface AuthContextType {
@@ -19,6 +21,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -31,7 +34,11 @@ export const useAuth = () => {
   return context;
 };
 
-function mapFirebaseUserToCustomUser(user: FirebaseUser): CustomUser {
+const allowedRoles = ['user', 'admin', 'staff'] as const;
+type Role = typeof allowedRoles[number];
+
+function mapFirebaseUserToCustomUser(user: FirebaseUser, role: string = 'user'): CustomUser {
+  const safeRole: Role = allowedRoles.includes(role as Role) ? (role as Role) : 'user';
   return {
     id: user.uid,
     email: user.email || '',
@@ -47,6 +54,7 @@ function mapFirebaseUserToCustomUser(user: FirebaseUser): CustomUser {
     },
     createdAt: user.metadata?.creationTime ? new Date(user.metadata.creationTime) : undefined,
     updatedAt: user.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime) : undefined,
+    role: safeRole,
   };
 }
 
@@ -56,10 +64,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setFirebaseUser(firebaseUser);
       if (firebaseUser) {
-        setUser(mapFirebaseUserToCustomUser(firebaseUser));
+        // Fetch user role from Firestore
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        const userSnap = await getDoc(userRef);
+        let role = 'user';
+        if (userSnap.exists()) {
+          role = userSnap.data().role || 'user';
+        } else {
+          // If user doc doesn't exist, create it with default role
+          await setDoc(userRef, { role: 'user', email: firebaseUser.email, name: firebaseUser.displayName });
+        }
+        setUser(mapFirebaseUserToCustomUser(firebaseUser, role));
       } else {
         setUser(null);
       }
@@ -80,6 +98,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(user, { displayName: name });
+      // Create user doc in Firestore with default role
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, { role: 'user', email, name });
     } catch (error) {
       throw error;
     }
@@ -101,6 +122,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const signInWithGoogle = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      // Create user doc in Firestore if it doesn't exist
+      const userRef = doc(db, 'users', result.user.uid);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        await setDoc(userRef, { role: 'user', email: result.user.email, name: result.user.displayName });
+      }
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const value = {
     user,
     firebaseUser,
@@ -109,6 +144,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signUp,
     logout,
     resetPassword,
+    signInWithGoogle,
   };
 
   return (

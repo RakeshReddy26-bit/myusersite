@@ -224,4 +224,5 @@ export interface User {
   };
   createdAt?: Date;
   updatedAt?: Date;
+  role?: 'admin' | 'user' | 'staff';
 } 
